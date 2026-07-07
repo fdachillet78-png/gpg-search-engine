@@ -141,7 +141,9 @@ function buildMaps(gpgList, coaData) {
   for (const g of (gpgList||[])) {
     const pn=g.Part_No||g.part_no||""; if(!pn||gpgMap.has(pn)) continue;
     const osAcc=g.Os_Acc||g.os_acc||"";
-    gpgMap.set(pn,{ osAcc, accountDef:osAcc?(coaMap.get(osAcc)||""):"", desc:g.Part_Descripcion||g.part_descripcion||"", accGroup:`${g.Acc_Group||""} - ${g.Acc_Group_Desc||""}` });
+    const accGroupDesc = g.Acc_Group_Desc||g.acc_group_desc||"";
+    const isCapex = accGroupDesc.toUpperCase().includes("CWIP");
+    gpgMap.set(pn,{ osAcc, accountDef:osAcc?(coaMap.get(osAcc)||""):"", desc:g.Part_Descripcion||g.part_descripcion||"", accGroup:`${g.Acc_Group||""} - ${accGroupDesc}`, isCapex });
   }
   return { coaMap, gpgMap };
 }
@@ -161,6 +163,11 @@ RECOMENDACIÓN — incluye siempre:
   • Cuenta: [Acc_Group]
   • Estándar CoA: [Account_Definition] ← razón principal de la recomendación
  
+REGLA CAPEX/CWIP (crítica):
+- Los GPGs marcados [CAPEX-CWIP] son EXCLUSIVAMENTE para proyectos de inversión de capital.
+- NUNCA los sugieras para trabajos ordinarios de mantenimiento, reparación o servicios.
+- Solo puedes mencionarlos si el usuario indica explícitamente que se trata de un proyecto de inversión/Capex.
+ 
 HISTORIAL (si se adjunta):
 - El historial puede contener usos INCORRECTOS de GPG.
 - Si el GPG del historial NO coincide con el CoA correcto, indícalo con ⚠️.
@@ -173,7 +180,7 @@ IDIOMA: siempre español.\n`;
     let n=0;
     for (const [pn,g] of gpgMap.entries()) {
       if (n++>500) break;
-      p += `GPG: ${pn} | Desc: ${g.desc} | Cuenta: ${g.accGroup} | Os_Acc: ${g.osAcc||"N/D"} | Estándar Global: ${g.accountDef||"N/D"}\n`;
+      p += `GPG: ${pn}${g.isCapex?" [CAPEX-CWIP]":""} | Desc: ${g.desc} | Cuenta: ${g.accGroup} | Os_Acc: ${g.osAcc||"N/D"} | Estándar Global: ${g.accountDef||"N/D"}\n`;
     }
   }
   if (coaData?.length) {
@@ -347,7 +354,12 @@ export default function App() {
     const currGpg = gpgRef.current;
     const currCoa = coaRef.current;
     const { gpgMap } = buildMaps(currGpg, currCoa);
-    const similar = findSimilar(currPo, terms, 5);
+    // Excluir POs que usaron GPGs Capex (CWIP) — no son referencia para trabajo ordinario
+    const poSinCapex = (currPo||[]).filter(l => {
+      const pn = l.Part_No||l.part_no||"";
+      return !gpgMap.get(pn)?.isCapex;
+    });
+    const similar = findSimilar(poSinCapex, terms, 5);
  
     const newMsgs = [...messages, { role:"user", content:msg, poRows:null }];
     setMessages(newMsgs);
