@@ -278,17 +278,29 @@ export default function App() {
   useEffect(()=>{ poRef.current=poLines;  },[poLines]);
   useEffect(()=>{ coaRef.current=coaData; },[coaData]);
 
-  // Cargar datos del servidor al iniciar
+  // Cargar datos: pedir URLs firmadas y descargar los blobs directamente
   useEffect(()=>{
     (async()=>{
       setLoading(true);
       try {
-        const res  = await fetch(`/api/data?terminal=${TERMINAL}`);
+        const res  = await fetch(`/api/data?terminal=${TERMINAL}`, { cache: "no-store" });
         const data = await res.json();
-        if (data.gpglist)  setGpgList(data.gpglist);
-        if (data.polines)  setPoLines(data.polines);
-        if (data.coa)      setCoaData(data.coa);
-        if (data.updatedAt) setUpdatedAt(data.updatedAt);
+        const urls = data.urls || {};
+        const fetchJson = async (url) => {
+          if (!url) return null;
+          try { const r = await fetch(url, { cache: "no-store" }); return r.ok ? await r.json() : null; }
+          catch { return null; }
+        };
+        const [g, p, coa, meta] = await Promise.all([
+          fetchJson(urls.gpglist),
+          fetchJson(urls.polines),
+          fetchJson(urls.coa),
+          fetchJson(urls.meta),
+        ]);
+        if (g)   setGpgList(g);
+        if (p)   setPoLines(p);
+        if (coa) setCoaData(coa);
+        if (meta?.updatedAt) setUpdatedAt(meta.updatedAt);
       } catch {}
       setLoading(false);
     })();
