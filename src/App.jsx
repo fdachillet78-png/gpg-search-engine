@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
-
+ 
 // ═══ DETECCIÓN DE TERMINAL POR URL ════════════════════════════════════════════
 // callao.vercel.app  → Callao
 // t4.vercel.app      → T4
@@ -11,11 +11,11 @@ function detectTerminal() {
   if (host.includes("t4") || path.startsWith("/t4")) return "t4";
   return "callao";
 }
-
+ 
 const TERMINAL   = detectTerminal();
 const TERM_LABEL = TERMINAL === "t4" ? "T4" : "Callao";
 const WELCOME    = "Hola! Soy el GPG Search Engine de APM Terminals. Puedo ayudarte a identificar el código GPG correcto para tu solicitud de compra en IFS10. ¿Sobre qué tipo de trabajo o equipo necesitas información?";
-
+ 
 // ═══ EXCEL ════════════════════════════════════════════════════════════════════
 function parseExcel(file) {
   return new Promise((resolve, reject) => {
@@ -30,7 +30,7 @@ function parseExcel(file) {
     reader.readAsArrayBuffer(file);
   });
 }
-
+ 
 function slim(rows) {
   return rows.map(row => {
     const out = {};
@@ -39,7 +39,7 @@ function slim(rows) {
     return out;
   });
 }
-
+ 
 // ═══ BÚSQUEDA ═════════════════════════════════════════════════════════════════
 function normalize(str) {
   return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
@@ -49,14 +49,17 @@ function stem(word) {
   if (word.length < 5) return word;
   if (word.endsWith("es") && word.length > 5) word = word.slice(0,-2);
   else if (word.endsWith("s") && word.length > 4) word = word.slice(0,-1);
-  for (const suf of ["acion","amiento","imiento","iendo","ando","cion","miento"])
+  for (const suf of ["acion","amiento","imiento","iendo","ando","cion","miento","ura"])
+    if (word.endsWith(suf) && word.length > suf.length+3) return word.slice(0,-suf.length);
+  // Infinitivos verbales: pintar→pint, limpiar→limpi, reparar→repar
+  for (const suf of ["ar","er","ir"])
     if (word.endsWith(suf) && word.length > suf.length+3) return word.slice(0,-suf.length);
   if (word.length > 7) return word.slice(0,-2);
   return word;
 }
 const STOP = new Set(["de","del","la","el","los","las","un","una","en","para","y","a","con","por","que","se","al","es","su","sus","lo","le","les","nos","mas","sin","entre","sobre","hasta","desde","como","si","no","o","e","u"]);
 function tokenize(str) { return normalize(str).split(" ").filter(w => w.length>2 && !STOP.has(w)); }
-
+ 
 const SYNS = {
   "luz":["luminaria","iluminacion","lampara","foco","led"],
   "luminaria":["luz","iluminacion","lampara","foco","led","alumbrado"],
@@ -69,7 +72,12 @@ const SYNS = {
   "mantenimiento":["preventivo","correctivo","reparacion","servicio","overhaul"],
   "reparacion":["mantenimiento","cambio","reemplazo","overhaul"],
   "cambio":["reemplazo","sustitucion","instalacion","montaje"],
-  "pintura":["anticorrosion","corrosion","recubrimiento","sandblasting"],
+  "pintura":["anticorrosion","corrosion","recubrimiento","sandblasting","pintado","esmalte"],
+  "pintar":["pintura","pintado","anticorrosion","recubrimiento","esmalte"],
+  "pintado":["pintura","pintar","recubrimiento"],
+  "limpieza":["limpiar","lavado","desinfeccion","fumigacion"],
+  "limpiar":["limpieza","lavado"],
+  "fachada":["exterior","frontis","muro","pared"],
   "estructura":["soldadura","corrosion","metalica","refuerzo"],
   "hidraulico":["cilindro","bomba","valvula","aceite","presion"],
   "aire":["acondicionado","comprimido","compresor","ventilacion","hvac"],
@@ -84,27 +92,47 @@ function extractTerms(msg) {
   }
   return [...exp];
 }
+// Raíces de acciones de servicio. Si la consulta contiene una acción,
+// los resultados DEBEN matchear esa acción (no solo el lugar/equipo).
+const ACTION_STEMS = ["pint","limpi","lav","repar","manten","fabric","instal","cambi","reemplaz","sustitu","suministr","montaj","mont","soldad","sold","calibr","inspecc","certific","alquil","fumig","desinfecc","recubr","sandblast","overhaul","rebobin","engras","lubric","impresion","confeccion"];
+ 
+function isActionTerm(term) {
+  const st = stem(normalize(term));
+  const nm = normalize(term);
+  return ACTION_STEMS.some(a => st.startsWith(a) || nm.startsWith(a));
+}
+ 
 function findSimilar(poLines, terms, limit=5) {
   if (!poLines?.length || !terms?.length) return [];
-  const qn = terms.map(t=>({ raw:normalize(t), stem:stem(normalize(t)) }));
+  const qn = terms.map(t=>({ raw:normalize(t), stem:stem(normalize(t)), isAction:isActionTerm(t) }));
+  const queryHasAction = qn.some(q=>q.isAction);
+ 
   const scored = poLines.map(line => {
     const raw = normalize(line.Part_Descripcion||line.part_descripcion||"");
     const words = tokenize(raw); const stems = words.map(w=>stem(w));
-    let score=0;
+    let score=0, actionMatched=false;
     for (const qt of qn) {
-      if (raw.includes(qt.raw)) { score += qt.raw.length>5?5:3; continue; }
-      if (stems.includes(qt.stem) && qt.stem.length>3) { score+=3; continue; }
-      for (const dw of words) {
-        const ml=Math.min(dw.length,qt.raw.length);
-        if (ml>=5) { let k=0; while(k<ml&&dw[k]===qt.raw[k])k++; if(k>=5){score+=2;break;} }
+      let matched = false;
+      if (raw.includes(qt.raw)) { score += qt.raw.length>5?5:3; matched=true; }
+      else if (stems.includes(qt.stem) && qt.stem.length>3) { score+=3; matched=true; }
+      else {
+        for (const dw of words) {
+          const ml=Math.min(dw.length,qt.raw.length);
+          if (ml>=4) { let k=0; while(k<ml&&dw[k]===qt.raw[k])k++; if(k>=4){score+=2;matched=true;break;} }
+        }
       }
+      if (matched && qt.isAction) actionMatched = true;
     }
-    return { line, score };
+    return { line, score, actionMatched };
   }).filter(x=>x.score>0);
-  scored.sort((a,b)=>b.score-a.score);
-  return scored.slice(0,limit).map(x=>x.line);
+ 
+  // Si la consulta tiene una acción de servicio, exigirla en los resultados
+  const qualified = queryHasAction ? scored.filter(x=>x.actionMatched) : scored;
+ 
+  qualified.sort((a,b)=>b.score-a.score);
+  return qualified.slice(0,limit).map(x=>x.line);
 }
-
+ 
 // ═══ GPG / CoA ════════════════════════════════════════════════════════════════
 function buildMaps(gpgList, coaData) {
   const coaMap = new Map();
@@ -117,29 +145,29 @@ function buildMaps(gpgList, coaData) {
   }
   return { coaMap, gpgMap };
 }
-
+ 
 function buildSystem(gpgList, coaData) {
   const { gpgMap } = buildMaps(gpgList, coaData);
   let p = `Eres un asistente de GPG codes para APM Terminals (grupo Maersk), terminal ${TERM_LABEL}.
 Ayudas a identificar el GPG correcto para órdenes de compra en IFS10.
-
+ 
 CÓMO RESPONDER:
 - Si la consulta es clara: recomienda directamente el GPG correcto según el CoA.
 - Si hay ambigüedad: haz UNA pregunta de descarte y espera la respuesta.
 - Sé directo y conciso.
-
+ 
 RECOMENDACIÓN — incluye siempre:
   • GPG: [código] — [descripción]
   • Cuenta: [Acc_Group]
   • Estándar CoA: [Account_Definition] ← razón principal de la recomendación
-
+ 
 HISTORIAL (si se adjunta):
 - El historial puede contener usos INCORRECTOS de GPG.
 - Si el GPG del historial NO coincide con el CoA correcto, indícalo con ⚠️.
 - NO repitas los datos del historial en texto — el sistema los muestra en tabla aparte.
-
+ 
 IDIOMA: siempre español.\n`;
-
+ 
   if (gpgList?.length) {
     p += `\n=== CATÁLOGO DE GPGs ===\n`;
     let n=0;
@@ -161,7 +189,7 @@ IDIOMA: siempre español.\n`;
     p += `\nNOTA: No hay datos cargados. Indica al usuario que cargue los archivos Excel.`;
   return p;
 }
-
+ 
 function buildPoContext(similarPo, gpgMap) {
   if (!similarPo?.length) return "";
   let block = `\n=== POs SIMILARES (referencia histórica — pueden tener GPG incorrecto) ===\n`;
@@ -174,7 +202,7 @@ function buildPoContext(similarPo, gpgMap) {
   }
   return block;
 }
-
+ 
 // ═══ UI COMPONENTS ════════════════════════════════════════════════════════════
 function MarkdownText({ text }) {
   const html = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
@@ -183,7 +211,7 @@ function MarkdownText({ text }) {
     .replace(/\n/g,"<br/>");
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
-
+ 
 function PoCard({ rows }) {
   const [exp, setExp] = useState(false);
   if (!rows?.length) return null;
@@ -223,7 +251,7 @@ function PoCard({ rows }) {
     </div>
   );
 }
-
+ 
 function FileBtn({ label, file, onFile, id }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
@@ -238,12 +266,12 @@ function FileBtn({ label, file, onFile, id }) {
     </div>
   );
 }
-
+ 
 const BP = { background:"#E8481D", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:600, cursor:"pointer" };
 const BO = { background:"#fff", color:"#475569", border:"1px solid #e2e8f0", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:500, cursor:"pointer" };
-
+ 
 const LOGO_B64 = "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";
-
+ 
 // ═══ APP ══════════════════════════════════════════════════════════════════════
 export default function App() {
   const [gpgList,   setGpgList]   = useState(null);
@@ -251,11 +279,11 @@ export default function App() {
   const [coaData,   setCoaData]   = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [loading,   setLoading]   = useState(true);
-
+ 
   const [messages,    setMessages]    = useState([{ role:"assistant", content:WELCOME, poRows:null }]);
   const [input,       setInput]       = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-
+ 
   const [showUpload, setShowUpload] = useState(false);
   const [authed,     setAuthed]     = useState(false);
   const [showPw,     setShowPw]     = useState(false);
@@ -267,17 +295,17 @@ export default function App() {
   const [coaF,       setCoaF]       = useState(null);
   const [uploading,  setUploading]  = useState(false);
   const [uploadMsg,  setUploadMsg]  = useState(null);
-
+ 
   const endRef   = useRef(null);
   const abortRef = useRef(null);
   const gpgRef   = useRef(null);
   const poRef    = useRef(null);
   const coaRef   = useRef(null);
-
+ 
   useEffect(()=>{ gpgRef.current=gpgList; },[gpgList]);
   useEffect(()=>{ poRef.current=poLines;  },[poLines]);
   useEffect(()=>{ coaRef.current=coaData; },[coaData]);
-
+ 
   // Cargar datos: pedir URLs firmadas y descargar los blobs directamente
   useEffect(()=>{
     (async()=>{
@@ -305,11 +333,11 @@ export default function App() {
       setLoading(false);
     })();
   },[]);
-
+ 
   useEffect(()=>{ endRef.current?.scrollIntoView({ behavior:"smooth" }); },[messages]);
-
+ 
   const dataLoaded = !!(gpgList?.length || poLines?.length);
-
+ 
   // ── SEND ──────────────────────────────────────────────────────────────────
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return;
@@ -320,23 +348,23 @@ export default function App() {
     const currCoa = coaRef.current;
     const { gpgMap } = buildMaps(currGpg, currCoa);
     const similar = findSimilar(currPo, terms, 5);
-
+ 
     const newMsgs = [...messages, { role:"user", content:msg, poRows:null }];
     setMessages(newMsgs);
     setIsStreaming(true);
     setMessages(prev=>[...prev,{ role:"assistant", content:"", streaming:true, poRows:null }]);
-
+ 
     const ctrl = new AbortController(); abortRef.current = ctrl;
     try {
       const system  = buildSystem(currGpg, currCoa) + buildPoContext(similar, gpgMap);
       const apiMsgs = newMsgs.map(m=>({ role:m.role, content:m.content }));
-
+ 
       const res = await fetch("/api/chat", {
         method:"POST", signal:ctrl.signal,
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ system, messages:apiMsgs }),
       });
-
+ 
       if (!res.ok) throw new Error(`API ${res.status}`);
       const reader=res.body.getReader(); const dec=new TextDecoder();
       let buf="", full="";
@@ -362,10 +390,10 @@ export default function App() {
         setMessages(prev=>{ const u=[...prev]; u[u.length-1]={role:"assistant",content:"Lo siento, ocurrió un error. Por favor intenta de nuevo.",streaming:false,poRows:null}; return u; });
     } finally { setIsStreaming(false); abortRef.current=null; }
   };
-
+ 
   const handleKey=(e)=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();} };
   const handleNew=()=>{ if(isStreaming)abortRef.current?.abort(); setMessages([{role:"assistant",content:WELCOME,poRows:null}]); setInput(""); };
-
+ 
   // ── UPLOAD ────────────────────────────────────────────────────────────────
   const handleCargar=()=>{ if(authed){setShowUpload(v=>!v);setUploadMsg(null);}else{setPwInput("");setPwError(null);setShowPw(true);} };
   const adminPwRef = useRef("");
@@ -389,7 +417,7 @@ export default function App() {
     }
     setPwBusy(false);
   };
-
+ 
   const handleUpload=async()=>{
     if(!gpgF&&!poF&&!coaF)return; setUploading(true); setUploadMsg(null);
     try {
@@ -398,11 +426,11 @@ export default function App() {
       if (gpgF) form.append("gpglist", gpgF);
       if (poF)  form.append("polines", poF);
       if (coaF) form.append("coa", coaF);
-
+ 
       const res  = await fetch("/api/upload", { method:"POST", headers:{ "x-admin-password": adminPwRef.current }, body:form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error||`Error ${res.status}`);
-
+ 
       // Actualizar estado local
       if (gpgF) { const d=slim(await parseExcel(gpgF)); setGpgList(d); }
       if (poF)  { const d=slim(await parseExcel(poF));  setPoLines(d); }
@@ -413,18 +441,18 @@ export default function App() {
     } catch(err) { setUploadMsg("Error: "+err.message); }
     setUploading(false);
   };
-
+ 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", fontFamily:"'Maersk Text Office','Nunito Sans','Segoe UI',sans-serif", background:"#f8f9fa", color:"#1a2332" }}>
-
+ 
       {loading && (
         <div style={{ position:"fixed", inset:0, background:"rgba(255,255,255,.9)", zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12 }}>
           <div style={{ width:36, height:36, border:"3px solid #e2e8f0", borderTop:"3px solid #E8481D", borderRadius:"50%", animation:"spin .8s linear infinite" }} />
           <p style={{ fontSize:13, color:"#64748b" }}>Cargando datos de {TERM_LABEL}…</p>
         </div>
       )}
-
+ 
       {/* HEADER */}
       <header style={{ height:70, background:"#fff", borderBottom:"1px solid #e2e8f0", display:"flex", alignItems:"center", padding:"0 20px", gap:16, flexShrink:0, boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>
         <img src={`data:image/webp;base64,${LOGO_B64}`} alt="APM Terminals" style={{ height:50, width:"auto", flexShrink:0, objectFit:"contain" }} />
@@ -442,7 +470,7 @@ export default function App() {
         </button>
         <button onClick={handleNew} style={{ ...BO, flexShrink:0 }}>+ Nueva consulta</button>
       </header>
-
+ 
       {/* UPLOAD PANEL */}
       {showUpload && (
         <div style={{ background:"#f1f5f9", borderBottom:"1px solid #e2e8f0", padding:"12px 20px", flexShrink:0 }}>
@@ -469,7 +497,7 @@ export default function App() {
           {uploadMsg && <p style={{ marginTop:8, fontSize:12, color:uploadMsg.startsWith("✓")?"#16a34a":"#dc2626" }}>{uploadMsg}</p>}
         </div>
       )}
-
+ 
       {/* MESSAGES */}
       <div style={{ flex:1, overflowY:"auto", padding:"20px 20px 8px" }}>
         <div style={{ maxWidth:800, margin:"0 auto", display:"flex", flexDirection:"column", gap:16 }}>
@@ -490,7 +518,7 @@ export default function App() {
           <div ref={endRef}/>
         </div>
       </div>
-
+ 
       {/* INPUT */}
       <div style={{ padding:"12px 20px 16px", background:"#fff", borderTop:"1px solid #e2e8f0", flexShrink:0 }}>
         <div style={{ maxWidth:800, margin:"0 auto", display:"flex", gap:8, alignItems:"flex-end" }}>
@@ -507,7 +535,7 @@ export default function App() {
           {!dataLoaded?`Carga los archivos Excel de ${TERM_LABEL} para obtener recomendaciones precisas.`:`Pregunta sobre qué GPG usar para cualquier trabajo o servicio en ${TERM_LABEL}.`}
         </p>
       </div>
-
+ 
       {/* PASSWORD MODAL */}
       {showPw && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:50, padding:20 }} onClick={()=>setShowPw(false)}>
@@ -527,7 +555,7 @@ export default function App() {
           </div>
         </div>
       )}
-
+ 
       <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0}} @keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
