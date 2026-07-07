@@ -356,9 +356,26 @@ export default function App() {
 
   // ── UPLOAD ────────────────────────────────────────────────────────────────
   const handleCargar=()=>{ if(authed){setShowUpload(v=>!v);setUploadMsg(null);}else{setPwInput("");setPwError(null);setShowPw(true);} };
-  const handlePw=()=>{
+  const adminPwRef = useRef("");
+  const handlePw=async()=>{
     if(!pwInput.trim())return; setPwBusy(true);
-    setTimeout(()=>{ if(pwInput===import.meta.env.VITE_ADMIN_PASSWORD||pwInput==="apmt2024admin"){setAuthed(true);setShowPw(false);setShowUpload(true);setPwError(null);}else{setPwError("Contraseña incorrecta.");} setPwBusy(false); },400);
+    try {
+      // Verificar contra el servidor (la contraseña real está en variables de entorno de Vercel)
+      const res = await fetch("/api/auth", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ password: pwInput }),
+      });
+      if (res.ok) {
+        adminPwRef.current = pwInput;
+        setAuthed(true); setShowPw(false); setShowUpload(true); setPwError(null);
+      } else {
+        setPwError("Contraseña incorrecta.");
+      }
+    } catch {
+      setPwError("Error de conexión.");
+    }
+    setPwBusy(false);
   };
 
   const handleUpload=async()=>{
@@ -370,7 +387,7 @@ export default function App() {
       if (poF)  form.append("polines", poF);
       if (coaF) form.append("coa", coaF);
 
-      const res  = await fetch("/api/upload", { method:"POST", body:form });
+      const res  = await fetch("/api/upload", { method:"POST", headers:{ "x-admin-password": adminPwRef.current }, body:form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error||`Error ${res.status}`);
 
