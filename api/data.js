@@ -1,4 +1,4 @@
-// api/data.js — Lee los datos guardados en Vercel Blob (store privado)
+// api/data.js — Devuelve URLs firmadas de los blobs para descarga directa
 import { list } from "@vercel/blob";
  
 export default async function handler(req, res) {
@@ -6,26 +6,24 @@ export default async function handler(req, res) {
   if (!["callao", "t4"].includes(terminal))
     return res.status(400).json({ error: "Terminal inválido" });
  
-  async function loadJson(type) {
-    try {
-      // Listar blobs con el prefijo exacto para obtener la URL con token de acceso
-      const { blobs } = await list({
-        prefix: `gpg/${terminal}/${type}.json`,
-        token:  process.env.BLOB_READ_WRITE_TOKEN,
-      });
-      if (!blobs.length) return null;
-      const r = await fetch(blobs[0].downloadUrl || blobs[0].url);
-      if (!r.ok) return null;
-      return await r.json();
-    } catch { return null; }
+  // Nunca cachear esta respuesta
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+ 
+  try {
+    const { blobs } = await list({
+      prefix: `gpg/${terminal}/`,
+      token:  process.env.BLOB_READ_WRITE_TOKEN,
+    });
+ 
+    const urls = { gpglist: null, polines: null, coa: null, meta: null };
+    for (const b of blobs) {
+      const name = b.pathname.split("/").pop().replace(".json", "");
+      if (name in urls) urls[name] = b.downloadUrl || b.url;
+    }
+ 
+    res.json({ terminal, urls });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
- 
-  const [gpglist, polines, coa, meta] = await Promise.all([
-    loadJson("gpglist"),
-    loadJson("polines"),
-    loadJson("coa"),
-    loadJson("meta"),
-  ]);
- 
-  res.json({ terminal, gpglist, polines, coa, updatedAt: meta?.updatedAt || null });
 }
