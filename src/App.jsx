@@ -166,7 +166,7 @@ function findSimilar(poLines, terms, limit=5) {
   const queryHasAction = qn.some(q=>q.isAction);
  
   const scored = poLines.map(line => {
-    const raw = normalize(line.Part_Descripcion||line.part_descripcion||"");
+    const raw = normalize(line.Part_Description||line.Part_Descripcion||line.part_description||line.part_descripcion||"");
     const words = tokenize(raw); const stems = words.map(w=>stem(w));
     let score=0, actionMatched=false;
     for (const qt of qn) {
@@ -207,7 +207,7 @@ function buildMaps(gpgList, coaData) {
     const accGroupDesc = g.Acc_Group_Desc||g.acc_group_desc||"";
     const isCapex = accGroupDesc.toUpperCase().includes("CWIP");
     const isIT    = IT_OS_ACC.has(osAcc);
-    gpgMap.set(pn,{ osAcc, osAccDesc, accountDef:osAcc?(coaMap.get(osAcc)||""):"", desc:g.Part_Descripcion||g.part_descripcion||"", accGroup:`${g.Acc_Group||""} - ${accGroupDesc}`, isCapex, isIT });
+    gpgMap.set(pn,{ osAcc, osAccDesc, accountDef:osAcc?(coaMap.get(osAcc)||""):"", desc:g.Part_Description||g.Part_Descripcion||g.part_description||g.part_descripcion||"", accGroup:`${g.Acc_Group||""} - ${accGroupDesc}`, isCapex, isIT });
   }
   return { coaMap, gpgMap };
 }
@@ -273,6 +273,36 @@ PASO 3 — FORMATO DE RESPUESTA:
 • Usa la descripción del GPG (Part_Description) como criterio clave para discriminar entre alternativas — una descripción más específica siempre tiene preferencia sobre una genérica.
 • ⚠️ Si el historial adjunto muestra un GPG distinto al correcto, señálalo.
  
+REGLA FACILITY vs CIVIL WORKS (distinción ambigua en el CoA):
+Cuando el trabajo involucre instalaciones físicas del terminal, distinguir entre:
+ 
+▸ ERM – Facility, external (AT_11310_25):
+  Trabajos DENTRO o SOBRE edificios e instalaciones cubiertas:
+  - Paredes, techos, pisos, ventanas, puertas
+  - Pintura de edificios e interiores
+  - Remodelación y ampliación de espacios internos
+  - Sistemas eléctricos, HVAC, plomería de edificios
+  - Mantenimiento de oficinas, almacenes, talleres, salas
+ 
+▸ Civil Works Repair & Maintenance, external:
+  Trabajos de infraestructura civil EXTERIOR del terminal:
+  - Pavimentos, pistas de circulación, vías internas
+  - Muelles, explanadas, áreas de operación de grúas
+  - Cercos perimetrales, muros de contención, drenajes
+  - Obras de concreto en áreas operativas al aire libre
+  - Canales, cunetas, sistemas de drenaje pluvial
+ 
+⚠️ ADVERTENCIA: Esta distinción es ambigua en el CoA global de APMT y genera dudas frecuentes incluso en el área de finanzas. Si el caso no es claro, indica al usuario que consulte con el área de Finanzas antes de emitir la PO.
+ 
+REGLA DE USO DE DESCRIPCIÓN DEL GPG (Part_Description):
+- La descripción del GPG es el criterio más importante para discriminar entre alternativas.
+- Siempre prefiere el GPG cuya descripción sea más específica para el trabajo solicitado.
+- NUNCA recomiendes un GPG de "CONSUMABLES" o "SUPPLIES" para un servicio — son para compra de materiales/insumos.
+- NUNCA recomiendes un GPG de "HVAC" para trabajos que no sean de climatización/ventilación.
+- NUNCA recomiendes un GPG de "ELECTRICAL" para trabajos que no sean eléctricos.
+- Si la descripción dice "SERVICES" o "MAINTENANCE AND REPAIR SERVICES", ese GPG es para contratar servicios externos.
+- Si la descripción dice "EQUIPMENT", ese GPG es para adquirir equipos, no contratar servicios.
+ 
 REGLA CAPEX/CWIP (crítica):
 - Los GPGs marcados [CAPEX-CWIP] son EXCLUSIVAMENTE para proyectos de inversión de capital.
 - NUNCA los sugieras para trabajos ordinarios de mantenimiento, reparación o servicios.
@@ -314,7 +344,8 @@ function buildPoContext(similarPo, gpgMap) {
     const coaDef=gpgMap.get(pn)?.accountDef||"GPG no en catálogo";
     const price=l["Price/Curr"]||l.Price_Curr||"";
     const curr=l.Currency||l.currency||"";
-    block += `GPG usado: ${pn} | Servicio: ${l.Part_Descripcion||""} | Proveedor: ${l.Supplier_Name||l.Supplier||""} | PO: ${l.Order_No||""} | Precio: ${price} ${curr} | CoA: "${coaDef}"\n`;
+    const svcDesc = l.Part_Description||l.Part_Descripcion||l.part_description||l.part_descripcion||"";
+    block += `GPG usado: ${pn} | Servicio: ${svcDesc} | Proveedor: ${l.Supplier_Name||l.Supplier||""} | PO: ${l.Order_No||""} | Precio: ${price} ${curr} | CoA: "${coaDef}"\n`;
   }
   return block;
 }
@@ -346,7 +377,7 @@ function PoCard({ rows, t }) {
             ))}
           </tr></thead>
           <tbody>{vis.map((r,i)=>{
-            const desc=r.Part_Descripcion||r.part_descripcion||"—";
+            const desc=r.Part_Description||r.Part_Descripcion||r.part_description||r.part_descripcion||"—";
             const supp=r.Supplier_Name||r.Supplier||"—";
             const po=r.Order_No||"—";
             const rp=r["Price/Curr"]||r.Price_Curr||"";
