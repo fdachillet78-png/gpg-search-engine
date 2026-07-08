@@ -264,9 +264,13 @@ REGLA CLAVE — el gasto cae a quien lo ejecuta:
  
 PASO 3 — FORMATO DE RESPUESTA:
 • Categoría: [AM / OT-Mantenimiento / OT-TECH / IT]
-• GPG: [código] — [descripción]
+• GPG principal recomendado: [código] — [descripción completa del GPG]
 • Cuenta contable: [Acc_Group]
-• Por qué: [breve justificación basada en quién ejecuta y qué tipo de sistema es]
+• Estándar CoA: [Account_Definition] — por qué aplica a este trabajo
+• Si hay GPGs alternativos válidos, lístalos con su descripción completa y explica en qué situación específica usar cada uno:
+  - G-XXXXXX — [descripción]: usar cuando [condición específica]
+  - G-XXXXXX — [descripción]: usar cuando [condición específica]
+• Usa la descripción del GPG (Part_Description) como criterio clave para discriminar entre alternativas — una descripción más específica siempre tiene preferencia sobre una genérica.
 • ⚠️ Si el historial adjunto muestra un GPG distinto al correcto, señálalo.
  
 REGLA CAPEX/CWIP (crítica):
