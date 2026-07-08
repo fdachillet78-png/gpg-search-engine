@@ -14,7 +14,71 @@ function detectTerminal() {
  
 const TERMINAL   = detectTerminal();
 const TERM_LABEL = TERMINAL === "t4" ? "T4" : "Callao";
-const WELCOME    = "Hola! Soy el GPG Search Engine de APM Terminals. Puedo ayudarte a identificar el código GPG correcto para tu solicitud de compra en IFS10. ¿Sobre qué tipo de trabajo o equipo necesitas información?";
+// ═══ TRADUCCIONES ═════════════════════════════════════════════════════════════
+const T = {
+  es: {
+    welcome: "Hola! Soy el GPG Search Engine de APM Terminals. Puedo ayudarte a identificar el código GPG correcto para tu solicitud de compra en IFS10. ¿Sobre qué tipo de trabajo o equipo necesitas información?",
+    loading: (t) => `Cargando datos de ${t}…`,
+    dataLoaded: (n) => `Datos cargados${n?` (${n} líneas)`:""}`,
+    noData: "Sin datos",
+    loadBtn: "📤 Cargar datos",
+    newChat: "+ Nueva consulta",
+    filesFor: "Archivos para",
+    select: "Seleccionar",
+    loadingBtn: "⏳ Cargando...",
+    upload: "Cargar",
+    notLoaded: "no cargado",
+    updated: "Actualizado:",
+    placeholder: "Escribe tu consulta... (Enter para enviar, Shift+Enter nueva línea)",
+    hintNoData: (t) => `Carga los archivos Excel de ${t} para obtener recomendaciones precisas.`,
+    hintData: (t) => `Pregunta sobre qué GPG usar para cualquier trabajo o servicio en ${t}.`,
+    restricted: "Acceso restringido",
+    adminOnly: "Solo administradores pueden cargar datos",
+    pwPlaceholder: "Ingresa la contraseña",
+    pwWrong: "Contraseña incorrecta.",
+    connError: "Error de conexión.",
+    cancel: "Cancelar",
+    verifying: "Verificando...",
+    enter: "Ingresar",
+    historyTitle: "🕐 Último servicio similar contratado",
+    seeLess: "Ver menos",
+    more: (n) => `+${n} más`,
+    thCols: ["Servicio","Proveedor","PO","Importe","Moneda"],
+    errorMsg: "Lo siento, ocurrió un error. Por favor intenta de nuevo.",
+    langLine: "IDIOMA: responde siempre en español.",
+  },
+  en: {
+    welcome: "Hi! I'm the APM Terminals GPG Search Engine. I can help you identify the correct GPG code for your purchase request in IFS10. What type of work or equipment do you need information about?",
+    loading: (t) => `Loading ${t} data…`,
+    dataLoaded: (n) => `Data loaded${n?` (${n} lines)`:""}`,
+    noData: "No data",
+    loadBtn: "📤 Upload data",
+    newChat: "+ New query",
+    filesFor: "Files for",
+    select: "Select",
+    loadingBtn: "⏳ Uploading...",
+    upload: "Upload",
+    notLoaded: "not loaded",
+    updated: "Updated:",
+    placeholder: "Type your query... (Enter to send, Shift+Enter new line)",
+    hintNoData: (t) => `Upload the ${t} Excel files to get accurate recommendations.`,
+    hintData: (t) => `Ask which GPG to use for any work or service at ${t}.`,
+    restricted: "Restricted access",
+    adminOnly: "Only administrators can upload data",
+    pwPlaceholder: "Enter password",
+    pwWrong: "Incorrect password.",
+    connError: "Connection error.",
+    cancel: "Cancel",
+    verifying: "Verifying...",
+    enter: "Enter",
+    historyTitle: "🕐 Most recent similar service",
+    seeLess: "See less",
+    more: (n) => `+${n} more`,
+    thCols: ["Service","Supplier","PO","Unit price","Currency"],
+    errorMsg: "Sorry, an error occurred. Please try again.",
+    langLine: "LANGUAGE: always respond in English.",
+  },
+};
  
 // ═══ EXCEL ════════════════════════════════════════════════════════════════════
 function parseExcel(file) {
@@ -148,7 +212,7 @@ function buildMaps(gpgList, coaData) {
   return { coaMap, gpgMap };
 }
  
-function buildSystem(gpgList, coaData) {
+function buildSystem(gpgList, coaData, lang="es") {
   const { gpgMap } = buildMaps(gpgList, coaData);
   let p = `Eres un asistente de GPG codes para APM Terminals (grupo Maersk), terminal ${TERM_LABEL}.
 Ayudas a identificar el GPG correcto para órdenes de compra en IFS10.
@@ -173,7 +237,7 @@ HISTORIAL (si se adjunta):
 - Si el GPG del historial NO coincide con el CoA correcto, indícalo con ⚠️.
 - NO repitas los datos del historial en texto — el sistema los muestra en tabla aparte.
  
-IDIOMA: siempre español.\n`;
+${T[lang].langLine}\n`;
  
   if (gpgList?.length) {
     p += `\n=== CATÁLOGO DE GPGs ===\n`;
@@ -219,20 +283,20 @@ function MarkdownText({ text }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
  
-function PoCard({ rows }) {
+function PoCard({ rows, t }) {
   const [exp, setExp] = useState(false);
   if (!rows?.length) return null;
   const vis = exp ? rows : rows.slice(0,1);
   return (
     <div style={{ marginTop:8, border:"1px solid #e2e8f0", borderRadius:10, overflow:"hidden", fontSize:12 }}>
       <div style={{ background:"#f8f9fa", padding:"6px 12px", borderBottom:"1px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <span style={{ fontWeight:600, color:"#475569", fontSize:11 }}>🕐 Último servicio similar contratado</span>
-        {rows.length>1 && <button onClick={()=>setExp(v=>!v)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"#E8481D", fontWeight:500, padding:0 }}>{exp?`Ver menos`:`+${rows.length-1} más`}</button>}
+        <span style={{ fontWeight:600, color:"#475569", fontSize:11 }}>{t.historyTitle}</span>
+        {rows.length>1 && <button onClick={()=>setExp(v=>!v)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"#E8481D", fontWeight:500, padding:0 }}>{exp?t.seeLess:t.more(rows.length-1)}</button>}
       </div>
       <div style={{ overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
           <thead><tr style={{ background:"#f1f5f9" }}>
-            {["Servicio","Proveedor","PO","Importe","Moneda"].map(h=>(
+            {t.thCols.map(h=>(
               <th key={h} style={{ padding:"5px 10px", textAlign:"left", fontWeight:600, color:"#64748b", whiteSpace:"nowrap", borderBottom:"1px solid #e2e8f0" }}>{h}</th>
             ))}
           </tr></thead>
@@ -286,8 +350,10 @@ export default function App() {
   const [coaData,   setCoaData]   = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [loading,   setLoading]   = useState(true);
+  const [lang,      setLang]      = useState("es");
+  const t = T[lang];
  
-  const [messages,    setMessages]    = useState([{ role:"assistant", content:WELCOME, poRows:null }]);
+  const [messages,    setMessages]    = useState([{ role:"assistant", content:T.es.welcome, poRows:null }]);
   const [input,       setInput]       = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
  
@@ -368,7 +434,7 @@ export default function App() {
  
     const ctrl = new AbortController(); abortRef.current = ctrl;
     try {
-      const system  = buildSystem(currGpg, currCoa) + buildPoContext(similar, gpgMap);
+      const system  = buildSystem(currGpg, currCoa, lang) + buildPoContext(similar, gpgMap);
       const apiMsgs = newMsgs.map(m=>({ role:m.role, content:m.content }));
  
       const res = await fetch("/api/chat", {
@@ -399,12 +465,12 @@ export default function App() {
       setMessages(prev=>{ const u=[...prev]; u[u.length-1]={ role:"assistant", content:full, streaming:false, poRows:similar.length>0?similar:null }; return u; });
     } catch(err){
       if(err?.name!=="AbortError")
-        setMessages(prev=>{ const u=[...prev]; u[u.length-1]={role:"assistant",content:"Lo siento, ocurrió un error. Por favor intenta de nuevo.",streaming:false,poRows:null}; return u; });
+        setMessages(prev=>{ const u=[...prev]; u[u.length-1]={role:"assistant",content:t.errorMsg,streaming:false,poRows:null}; return u; });
     } finally { setIsStreaming(false); abortRef.current=null; }
   };
  
   const handleKey=(e)=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();} };
-  const handleNew=()=>{ if(isStreaming)abortRef.current?.abort(); setMessages([{role:"assistant",content:WELCOME,poRows:null}]); setInput(""); };
+  const handleNew=()=>{ if(isStreaming)abortRef.current?.abort(); setMessages([{role:"assistant",content:t.welcome,poRows:null}]); setInput(""); };
  
   // ── UPLOAD ────────────────────────────────────────────────────────────────
   const handleCargar=()=>{ if(authed){setShowUpload(v=>!v);setUploadMsg(null);}else{setPwInput("");setPwError(null);setShowPw(true);} };
@@ -422,10 +488,10 @@ export default function App() {
         adminPwRef.current = pwInput;
         setAuthed(true); setShowPw(false); setShowUpload(true); setPwError(null);
       } else {
-        setPwError("Contraseña incorrecta.");
+        setPwError(t.pwWrong);
       }
     } catch {
-      setPwError("Error de conexión.");
+      setPwError(t.connError);
     }
     setPwBusy(false);
   };
@@ -461,7 +527,7 @@ export default function App() {
       {loading && (
         <div style={{ position:"fixed", inset:0, background:"rgba(255,255,255,.9)", zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12 }}>
           <div style={{ width:36, height:36, border:"3px solid #e2e8f0", borderTop:"3px solid #E8481D", borderRadius:"50%", animation:"spin .8s linear infinite" }} />
-          <p style={{ fontSize:13, color:"#64748b" }}>Cargando datos de {TERM_LABEL}…</p>
+          <p style={{ fontSize:13, color:"#64748b" }}>{t.loading(TERM_LABEL)}</p>
         </div>
       )}
  
@@ -475,19 +541,32 @@ export default function App() {
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 10px", borderRadius:20, fontSize:11, flexShrink:0, border:`1px solid ${dataLoaded?"#86efac":"#fcd34d"}`, background:dataLoaded?"#f0fdf4":"#fffbeb", color:dataLoaded?"#16a34a":"#92400e" }}>
           <span style={{ width:6, height:6, borderRadius:"50%", background:dataLoaded?"#22c55e":"#f59e0b", display:"inline-block" }} />
-          {dataLoaded?`Datos cargados${poLines?.length?` (${poLines.length.toLocaleString()} líneas)`:""}` : "Sin datos"}
+          {dataLoaded?t.dataLoaded(poLines?.length?poLines.length.toLocaleString():null) : t.noData}
         </div>
         <button onClick={handleCargar} style={{ ...BO, display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-          📤 Cargar datos <span style={{ fontSize:10 }}>{showUpload?"▲":"▼"}</span>
+          {t.loadBtn} <span style={{ fontSize:10 }}>{showUpload?"▲":"▼"}</span>
         </button>
-        <button onClick={handleNew} style={{ ...BO, flexShrink:0 }}>+ Nueva consulta</button>
+        <button onClick={handleNew} style={{ ...BO, flexShrink:0 }}>{t.newChat}</button>
+        {/* Selector de idioma */}
+        <div style={{ display:"flex", gap:2, background:"#f1f5f9", borderRadius:8, padding:2, flexShrink:0 }}>
+          {["es","en"].map(l=>(
+            <button key={l} onClick={()=>setLang(l)} style={{
+              padding:"4px 10px", borderRadius:6, fontSize:11, fontWeight:700, border:"none", cursor:"pointer",
+              background: lang===l ? "#fff" : "transparent",
+              color: lang===l ? "#E8481D" : "#64748b",
+              boxShadow: lang===l ? "0 1px 3px rgba(0,0,0,.1)" : "none",
+            }}>
+              {l.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </header>
  
       {/* UPLOAD PANEL */}
       {showUpload && (
         <div style={{ background:"#f1f5f9", borderBottom:"1px solid #e2e8f0", padding:"12px 20px", flexShrink:0 }}>
           <p style={{ fontSize:12, fontWeight:600, marginBottom:10, color:"#1a2332" }}>
-            Archivos para <strong style={{ color:"#E8481D" }}>{TERM_LABEL}</strong>:
+            {t.filesFor} <strong style={{ color:"#E8481D" }}>{TERM_LABEL}</strong>:
           </p>
           <div style={{ display:"flex", flexWrap:"wrap", gap:16, alignItems:"flex-end" }}>
             <FileBtn label="POLines (.xlsx)" file={poF}  onFile={setPoF}  id="fi-po"  />
@@ -495,16 +574,16 @@ export default function App() {
             <FileBtn label="CoA (.xlsx)"     file={coaF} onFile={setCoaF} id="fi-coa" />
             <button onClick={handleUpload} disabled={uploading||(!gpgF&&!poF&&!coaF)}
               style={{ ...BP, padding:"6px 18px", fontSize:12, opacity:(uploading||(!gpgF&&!poF&&!coaF))?0.5:1 }}>
-              {uploading?"⏳ Cargando...":"Cargar"}
+              {uploading?t.loadingBtn:t.upload}
             </button>
           </div>
           <div style={{ marginTop:10, display:"flex", flexWrap:"wrap", gap:6, alignItems:"center" }}>
             {[{l:"GPGList",v:gpgList},{l:"POLines",v:poLines},{l:"CoA",v:coaData}].map(({l,v})=>(
               <span key={l} style={{ fontSize:11, padding:"2px 10px", borderRadius:20, border:`1px solid ${v?.length?"#86efac":"#e2e8f0"}`, background:v?.length?"#f0fdf4":"#fff", color:v?.length?"#16a34a":"#94a3b8" }}>
-                {l}: {v?.length?`${v.length.toLocaleString()} ✓`:"no cargado"}
+                {l}: {v?.length?`${v.length.toLocaleString()} ✓`:t.notLoaded}
               </span>
             ))}
-            {updatedAt && <span style={{ fontSize:11, color:"#94a3b8" }}>Actualizado: {new Date(updatedAt).toLocaleString("es-ES")}</span>}
+            {updatedAt && <span style={{ fontSize:11, color:"#94a3b8" }}>{t.updated} {new Date(updatedAt).toLocaleString(lang==="en"?"en-US":"es-ES")}</span>}
           </div>
           {uploadMsg && <p style={{ marginTop:8, fontSize:12, color:uploadMsg.startsWith("✓")?"#16a34a":"#dc2626" }}>{uploadMsg}</p>}
         </div>
@@ -522,7 +601,7 @@ export default function App() {
                     ? <span><MarkdownText text={m.content}/>{m.streaming&&<span style={{ display:"inline-block",width:2,height:14,background:"#1a2332",marginLeft:2,verticalAlign:"middle",animation:"blink 1s infinite" }}/>}</span>
                     : m.content}
                 </div>
-                {m.role==="assistant" && !m.streaming && <PoCard rows={m.poRows} />}
+                {m.role==="assistant" && !m.streaming && <PoCard rows={m.poRows} t={t} />}
               </div>
               {m.role==="user" && <div style={{ width:28, height:28, borderRadius:"50%", background:"#e2e8f0", color:"#475569", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0, marginTop:2 }}>U</div>}
             </div>
@@ -535,7 +614,7 @@ export default function App() {
       <div style={{ padding:"12px 20px 16px", background:"#fff", borderTop:"1px solid #e2e8f0", flexShrink:0 }}>
         <div style={{ maxWidth:800, margin:"0 auto", display:"flex", gap:8, alignItems:"flex-end" }}>
           <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey} disabled={isStreaming}
-            placeholder="Escribe tu consulta... (Enter para enviar, Shift+Enter nueva línea)" rows={1}
+            placeholder={t.placeholder} rows={1}
             style={{ flex:1, padding:"10px 14px", borderRadius:10, border:"1px solid #e2e8f0", fontSize:14, resize:"none", minHeight:44, maxHeight:120, fontFamily:"inherit", outline:"none", lineHeight:1.5, color:"#1a2332" }}
             onInput={e=>{ e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,120)+"px"; }} />
           <button onClick={handleSend} disabled={!input.trim()||isStreaming}
@@ -543,8 +622,9 @@ export default function App() {
             {isStreaming?"⏳":"➤"}
           </button>
         </div>
-        <p style={{ maxWidth:800, margin:"6px auto 0", fontSize:11, color:"#94a3b8" }}>
-          {!dataLoaded?`Carga los archivos Excel de ${TERM_LABEL} para obtener recomendaciones precisas.`:`Pregunta sobre qué GPG usar para cualquier trabajo o servicio en ${TERM_LABEL}.`}
+        <p style={{ maxWidth:800, margin:"6px auto 0", fontSize:11, color:"#94a3b8", display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+          <span>{!dataLoaded?t.hintNoData(TERM_LABEL):t.hintData(TERM_LABEL)}</span>
+          <span style={{ color:"#cbd5e1" }}>Elaborado por Franco D' Achille — APMT Callao</span>
         </p>
       </div>
  
@@ -554,15 +634,15 @@ export default function App() {
           <div style={{ background:"#fff", borderRadius:14, padding:28, width:"100%", maxWidth:360, boxShadow:"0 8px 32px rgba(0,0,0,.2)" }} onClick={e=>e.stopPropagation()}>
             <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:18 }}>
               <div style={{ width:40, height:40, borderRadius:"50%", background:"#E8481D18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🔒</div>
-              <div><p style={{ fontWeight:600, color:"#1a2332" }}>Acceso restringido</p><p style={{ fontSize:12, color:"#64748b" }}>Solo administradores pueden cargar datos</p></div>
+              <div><p style={{ fontWeight:600, color:"#1a2332" }}>{t.restricted}</p><p style={{ fontSize:12, color:"#64748b" }}>{t.adminOnly}</p></div>
             </div>
             <input type="password" value={pwInput} autoFocus onChange={e=>{setPwInput(e.target.value);setPwError(null);}} onKeyDown={e=>e.key==="Enter"&&handlePw()}
-              placeholder="Ingresa la contraseña"
+              placeholder={t.pwPlaceholder}
               style={{ width:"100%", border:`1px solid ${pwError?"#ef4444":"#e2e8f0"}`, borderRadius:8, padding:"10px 12px", fontSize:14, outline:"none", marginBottom:8, boxSizing:"border-box", fontFamily:"inherit" }} />
             {pwError && <p style={{ fontSize:12, color:"#ef4444", marginBottom:8 }}>⚠️ {pwError}</p>}
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
-              <button onClick={()=>setShowPw(false)} style={{ ...BO, flex:1 }}>Cancelar</button>
-              <button onClick={handlePw} disabled={pwBusy||!pwInput.trim()} style={{ ...BP, flex:1, opacity:(pwBusy||!pwInput.trim())?0.5:1 }}>{pwBusy?"Verificando...":"Ingresar"}</button>
+              <button onClick={()=>setShowPw(false)} style={{ ...BO, flex:1 }}>{t.cancel}</button>
+              <button onClick={handlePw} disabled={pwBusy||!pwInput.trim()} style={{ ...BP, flex:1, opacity:(pwBusy||!pwInput.trim())?0.5:1 }}>{pwBusy?t.verifying:t.enter}</button>
             </div>
           </div>
         </div>
