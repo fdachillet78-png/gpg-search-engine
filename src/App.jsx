@@ -258,9 +258,15 @@ D) GASTO IT (Information Technology):
    - La diferencia con OT: IT es infraestructura informática general; OT son sistemas que monitoran/controlan procesos físicos del terminal.
  
 PASO 2 — PREGUNTAS DE DESCARTE (si hay ambigüedad):
-Si no está claro si es AM, OT-Mantenimiento u OT-TECH, haz UNA sola pregunta:
-- "¿Quién ejecuta o contrata este trabajo — el área de Mantenimiento o el área de TECH/OT?"
-- "¿El equipo o sistema involucrado controla/monitorea procesos físicos (OT) o es infraestructura informática general (IT)?"
+Si no está claro si es OT-Mantenimiento u OT-TECH, haz UNA sola pregunta:
+- "¿Quién emite el requerimiento de compra — el área de Mantenimiento o el área de TECH/OT?"
+ 
+REGLA CLAVE — el gasto cae a quien lo ejecuta:
+- El GPG define a qué cuenta va el gasto, y el gasto le cae al área que emite el requerimiento.
+- Si Mantenimiento emite la PO → G-301148 (el gasto queda en presupuesto de Mantenimiento).
+- Si TECH/OT emite la PO → G-301293 al G-301298 (el gasto queda en presupuesto de TECH).
+- Si el área de Mantenimiento no quiere asumir un gasto (ej. porque internamente se acordó que las implementaciones nuevas las gestiona TECH), entonces el requerimiento debe partir de TECH con el GPG correspondiente, y viceversa.
+- En caso de duda sobre quién debe asumir el gasto, recomienda al usuario alinearse internamente antes de emitir la PO.
  
 PASO 3 — FORMATO DE RESPUESTA:
 • Categoría: [AM / OT-Mantenimiento / OT-TECH / IT]
