@@ -124,35 +124,29 @@ function stem(word) {
 const STOP = new Set(["de","del","la","el","los","las","un","una","en","para","y","a","con","por","que","se","al","es","su","sus","lo","le","les","nos","mas","sin","entre","sobre","hasta","desde","como","si","no","o","e","u"]);
 function tokenize(str) { return normalize(str).split(" ").filter(w => w.length>2 && !STOP.has(w)); }
  
-const SYNS = {
-  "luz":["luminaria","iluminacion","lampara","foco","led"],
-  "luminaria":["luz","iluminacion","lampara","foco","led","alumbrado"],
-  "grua":["rtg","stc","sts","crane","portico"],
-  "rtg":["grua","rubber","tyred","gantry"],
-  "sts":["grua","ship","shore","portico"],
-  "motor":["electrico","mecanico","reductor","transmision"],
-  "electrico":["motor","panel","tablero","cable","interruptor"],
-  "neumatico":["llanta","rueda","goma","tire"],
-  "mantenimiento":["preventivo","correctivo","reparacion","servicio","overhaul"],
-  "reparacion":["mantenimiento","cambio","reemplazo","overhaul"],
-  "cambio":["reemplazo","sustitucion","instalacion","montaje"],
-  "pintura":["anticorrosion","corrosion","recubrimiento","sandblasting","pintado","esmalte"],
-  "pintar":["pintura","pintado","anticorrosion","recubrimiento","esmalte"],
-  "pintado":["pintura","pintar","recubrimiento"],
-  "limpieza":["limpiar","lavado","desinfeccion","fumigacion"],
-  "limpiar":["limpieza","lavado"],
-  "fachada":["exterior","frontis","muro","pared"],
-  "estructura":["soldadura","corrosion","metalica","refuerzo"],
-  "hidraulico":["cilindro","bomba","valvula","aceite","presion"],
-  "aire":["acondicionado","comprimido","compresor","ventilacion","hvac"],
-  "seguridad":["incendio","extintor","alarma","sensor","sprinkler"],
-};
+// Palabras genéricas de negocio que no aportan especificidad a la búsqueda
+const BUSINESS_STOP = new Set([
+  "servicio","servicios","gpg","uso","usar","usar","necesito","necesita","necesitamos",
+  "contratar","contrato","contratacion","comprar","compra","adquirir","adquisicion",
+  "solicitar","solicitud","requerimiento","requiero","requiere","pedido","orden",
+  "trabajo","trabajos","labores","actividad","actividades","tarea","tareas",
+  "proveedor","empresa","contratista","externo","externa","externos",
+  "cual","cuales","que","como","donde","cuando","quien","quiero","quiere",
+  "nuevo","nueva","existente","actual","general","especifico","tipo","tipos",
+  "pagar","pago","costo","costo","precio","monto","importe","factura",
+  "hacer","realizar","ejecutar","efectuar","llevar","cabo","fin","objetivo",
+]);
+ 
+// extractTerms: solo términos específicos del trabajo/servicio solicitado.
+// Filtra palabras genéricas de negocio y stopwords gramaticales.
 function extractTerms(msg) {
-  const tokens = tokenize(msg);
+  const tokens = tokenize(msg).filter(t => !BUSINESS_STOP.has(t));
   const exp = new Set(tokens);
   for (const t of tokens) {
-    for (const s of (SYNS[t]||[])) exp.add(s);
-    const st = stem(t); if (st!==t && st.length>3) exp.add(st);
+    if (t.length > 6) {
+      const st = stem(t);
+      if (st !== t && st.length > 4) exp.add(st);
+    }
   }
   return [...exp];
 }
@@ -188,7 +182,7 @@ function findSimilar(poLines, terms, limit=5) {
       if (matched && qt.isAction) actionMatched = true;
     }
     return { line, score, actionMatched };
-  }).filter(x=>x.score>0);
+  }).filter(x=>x.score>=2); // exigir al menos 2 puntos para evitar falsos positivos por términos genéricos
  
   // Si la consulta tiene una acción de servicio, exigirla en los resultados
   const qualified = queryHasAction ? scored.filter(x=>x.actionMatched) : scored;
