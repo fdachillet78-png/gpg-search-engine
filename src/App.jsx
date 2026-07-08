@@ -76,7 +76,7 @@ const T = {
     more: (n) => `+${n} more`,
     thCols: ["Service","Supplier","PO","Unit price","Currency"],
     errorMsg: "Sorry, an error occurred. Please try again.",
-    langLine: "LANGUAGE: always respond in English.",
+    langLine: "LANGUAGE: always respond in English. When referring to categories, use: AM (Asset Management), OT-Maintenance (OT work by Maintenance team), OT-TECH (OT work by Technology/OT&A team), IT (Information Technology).",
   },
 };
  
@@ -201,13 +201,19 @@ function findSimilar(poLines, terms, limit=5) {
 function buildMaps(gpgList, coaData) {
   const coaMap = new Map();
   for (const c of (coaData||[])) { const k=c.Os_Acc||c.os_acc||""; if(k) coaMap.set(k,c.Account_Definition||c.account_definition||""); }
+  const IT_OS_ACC = new Set(["AT_11310_55","AT_11310_54","AT_11310_53","AT_11310_66","AT_11529_06","AT_11529_07"]);
+ 
   const gpgMap = new Map();
   for (const g of (gpgList||[])) {
-    const pn=g.Part_No||g.part_no||""; if(!pn||gpgMap.has(pn)) continue;
+    const pn=g.Part_No||g.part_no||""; if(!pn) continue;
+    const osAccDesc = (g.Os_Acc_Desc||g.os_acc_desc||"").trim();
+    if (osAccDesc.toLowerCase().endsWith("internal")) continue;
+    if (gpgMap.has(pn)) continue;
     const osAcc=g.Os_Acc||g.os_acc||"";
     const accGroupDesc = g.Acc_Group_Desc||g.acc_group_desc||"";
     const isCapex = accGroupDesc.toUpperCase().includes("CWIP");
-    gpgMap.set(pn,{ osAcc, accountDef:osAcc?(coaMap.get(osAcc)||""):"", desc:g.Part_Descripcion||g.part_descripcion||"", accGroup:`${g.Acc_Group||""} - ${accGroupDesc}`, isCapex });
+    const isIT    = IT_OS_ACC.has(osAcc);
+    gpgMap.set(pn,{ osAcc, osAccDesc, accountDef:osAcc?(coaMap.get(osAcc)||""):"", desc:g.Part_Descripcion||g.part_descripcion||"", accGroup:`${g.Acc_Group||""} - ${accGroupDesc}`, isCapex, isIT });
   }
   return { coaMap, gpgMap };
 }
@@ -215,26 +221,61 @@ function buildMaps(gpgList, coaData) {
 function buildSystem(gpgList, coaData, lang="es") {
   const { gpgMap } = buildMaps(gpgList, coaData);
   let p = `Eres un asistente de GPG codes para APM Terminals (grupo Maersk), terminal ${TERM_LABEL}.
-Ayudas a identificar el GPG correcto para órdenes de compra en IFS10.
+Ayudas a identificar el GPG correcto para órdenes de compra en IFS10, asegurando que el gasto vaya a la cuenta contable correcta.
  
-CÓMO RESPONDER:
-- Si la consulta es clara: recomienda directamente el GPG correcto según el CoA.
-- Si hay ambigüedad: haz UNA pregunta de descarte y espera la respuesta.
-- Sé directo y conciso.
+═══════════════════════════════════════════════════════
+MARCO DE CLASIFICACIÓN AM / OT / IT (regla global APMT)
+═══════════════════════════════════════════════════════
  
-RECOMENDACIÓN — incluye siempre:
-  • GPG: [código] — [descripción]
-  • Cuenta: [Acc_Group]
-  • Estándar CoA: [Account_Definition] ← razón principal de la recomendación
+PASO 1 — DETERMINAR EL TIPO DE GASTO:
+Antes de recomendar un GPG, identifica a qué categoría pertenece el trabajo:
+ 
+A) GASTO AM (Asset Management):
+   - Mantenimiento y reparación de equipos físicos del terminal que NO son OT ni IT.
+   - Ejemplos: grúas STS/RTG/SC, vehículos, infraestructura civil, edificios, tuberías, pintura, estructuras metálicas.
+   - GPG: usar catálogo AM estándar (cuentas PE00xx).
+ 
+B) GASTO OT — ejecutado por MANTENIMIENTO (Maintenance Operations):
+   - El trabajo involucra sistemas OT (tecnología que monitorea/controla procesos físicos) PERO lo ejecuta o contrata el área de Mantenimiento.
+   - Sistemas OT incluyen: PLCs, SCADA, actuadores, sensores, HMIs, access control, CCTV, edge management, automation systems, handheld/radio equipment, electronic displays, end point devices, firmware, gate operating system, crane/gate OCR, industrial control systems, IPCs, NRA, automation integration layer, terminal gate system, wireless connectivity, VMT, terminal operating system (TOS).
+   - GPG EXCLUSIVO para este caso: G-301148 (OT cost — Maintenance scope).
+ 
+C) GASTO OT — ejecutado por TECH (área de Tecnología/OT&A):
+   - El trabajo OT lo gestiona o contrata el área de TECH/OT&A.
+   - Usar el GPG OT-TECH según el tipo de gasto:
+     • G-301293 — Telecom related (costos externos de telecomunicaciones OT)
+     • G-301294 — Software related (software OT externo)
+     • G-301295 — Hardware related (hardware OT externo)
+     • G-301296 — Consultancy fee (consultoría OT externa)
+     • G-301297 — Cost allocated FROM other entities (costos OT recibidos de otras entidades)
+     • G-301298 — Cost allocated TO other entities (costos OT asignados a otras entidades)
+ 
+D) GASTO IT (Information Technology):
+   - Sistemas y suministros IT: desktop/laptops, cloud services, IFS, Atlas, Navis, business intelligence tools, cyber security tools, printers/scanners, workforce management system, accesorios de cómputo (mouse, teclado, cables, consumibles IT, etc.).
+   - Los GPGs de categoría IT están marcados con [IT] en el catálogo — recomiéndalos igual que cualquier otro GPG.
+   - Os_Acc de cuentas IT: AT_11310_55, AT_11310_54, AT_11310_53, AT_11310_66, AT_11529_06, AT_11529_07.
+   - Ejemplos: G-015313 (consumables IT), G-011709 (IT accessories and cables).
+   - La diferencia con OT: IT es infraestructura informática general; OT son sistemas que monitoran/controlan procesos físicos del terminal.
+ 
+PASO 2 — PREGUNTAS DE DESCARTE (si hay ambigüedad):
+Si no está claro si es AM, OT-Mantenimiento u OT-TECH, haz UNA sola pregunta:
+- "¿Quién ejecuta o contrata este trabajo — el área de Mantenimiento o el área de TECH/OT?"
+- "¿El equipo o sistema involucrado controla/monitorea procesos físicos (OT) o es infraestructura informática general (IT)?"
+ 
+PASO 3 — FORMATO DE RESPUESTA:
+• Categoría: [AM / OT-Mantenimiento / OT-TECH / IT]
+• GPG: [código] — [descripción]
+• Cuenta contable: [Acc_Group]
+• Por qué: [breve justificación basada en quién ejecuta y qué tipo de sistema es]
+• ⚠️ Si el historial adjunto muestra un GPG distinto al correcto, señálalo.
  
 REGLA CAPEX/CWIP (crítica):
 - Los GPGs marcados [CAPEX-CWIP] son EXCLUSIVAMENTE para proyectos de inversión de capital.
 - NUNCA los sugieras para trabajos ordinarios de mantenimiento, reparación o servicios.
-- Solo puedes mencionarlos si el usuario indica explícitamente que se trata de un proyecto de inversión/Capex.
+- Solo si el usuario indica explícitamente que es un proyecto de inversión/Capex.
  
 HISTORIAL (si se adjunta):
-- El historial puede contener usos INCORRECTOS de GPG.
-- Si el GPG del historial NO coincide con el CoA correcto, indícalo con ⚠️.
+- Puede contener usos INCORRECTOS. Valida siempre contra las reglas anteriores.
 - NO repitas los datos del historial en texto — el sistema los muestra en tabla aparte.
  
 ${T[lang].langLine}\n`;
@@ -244,7 +285,7 @@ ${T[lang].langLine}\n`;
     let n=0;
     for (const [pn,g] of gpgMap.entries()) {
       if (n++>500) break;
-      p += `GPG: ${pn}${g.isCapex?" [CAPEX-CWIP]":""} | Desc: ${g.desc} | Cuenta: ${g.accGroup} | Os_Acc: ${g.osAcc||"N/D"} | Estándar Global: ${g.accountDef||"N/D"}\n`;
+      const gpgTag = g.isCapex?"[CAPEX-CWIP]":g.isIT?"[IT]":""; p += `GPG: ${pn}${gpgTag?" "+gpgTag:""} | Desc: ${g.desc} | Cuenta: ${g.accGroup} | Os_Acc: ${g.osAcc||"N/D"} | Estándar Global: ${g.accountDef||"N/D"}\n`;
     }
   }
   if (coaData?.length) {
