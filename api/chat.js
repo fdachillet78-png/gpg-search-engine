@@ -2,16 +2,16 @@
 module.exports = async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
- 
+
   const msgs    = req.body.messages || [];
   const system  = req.body.system   || "";
   const allText = msgs.map(m => m.content).join(" ").toLowerCase();
- 
+
   // Detectar si ya se sabe quién ejecuta en el historial
   const hasExecutor = /\bmantenimiento\b|\bmaintenance\b|\b1\b|\btech\b|\bot&a\b|\bota\b|\btecnolog/.test(allText);
- 
+
   let finalMessages = msgs;
- 
+
   // Si es el primer mensaje y aún no se sabe quién ejecuta,
   // inyectar la pregunta obligatoria como primera respuesta del asistente
   if (msgs.length === 1 && !hasExecutor) {
@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
     res.end();
     return;
   }
- 
+
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -48,15 +48,15 @@ module.exports = async function handler(req, res) {
         messages:   finalMessages,
       }),
     });
- 
+
     if (!response.ok) {
       const err = await response.json();
       return res.status(response.status).json(err);
     }
- 
+
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
- 
+
     const reader  = response.body.getReader();
     const decoder = new TextDecoder();
     while (true) {
@@ -65,7 +65,7 @@ module.exports = async function handler(req, res) {
       res.write(decoder.decode(value, { stream: true }));
     }
     res.end();
- 
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
